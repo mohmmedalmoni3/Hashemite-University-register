@@ -123,11 +123,12 @@ body{background:radial-gradient(ellipse at 82% 0%,rgba(230,28,42,.065),transpare
 }
 
 /* Fixed phone viewport: larger, full-width touch fields with no side pan or zoom. */
-@media(max-width:650px){
+@media(max-width:850px){
   html,body{width:100%;max-width:100%;overflow-x:clip;overscroll-behavior-x:none;touch-action:pan-y}
   .wrap{width:calc(100% - 24px);max-width:100%;margin-inline:auto}
   .topbar,.registration-first,.registration-first>*{min-width:0;max-width:100%}
   .registration-first{gap:16px;padding-block:16px 24px}
+  .registration-first .registration-panel{order:-1;width:100%;max-width:100%}
   .registration-first .registration-form{width:100%;padding:25px 18px 22px;border:1px solid #e5e8ee;border-radius:16px;overflow:hidden}
   .registration-first .form-top{gap:12px;margin-bottom:23px}
   .registration-first .form-label{font-size:20px;line-height:1.65}
@@ -182,7 +183,7 @@ body{background:radial-gradient(ellipse at 82% 0%,rgba(230,28,42,.065),transpare
 .registration-success-visible{animation:registration-state-in .55s cubic-bezier(.2,.7,.3,1) both}
 .registration-success.device-already-registered .success-art>span{background:#c9212b}
 @keyframes registration-state-in{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
-@media(max-width:650px){
+@media(max-width:850px){
   .registration-first .registration-panel{order:-1;width:100%;max-width:100%}
   .registration-first .registration-success{min-height:480px;padding:32px 22px 26px;border-radius:16px}
   .registration-success .success-message{font-size:15px}
@@ -191,7 +192,7 @@ body{background:radial-gradient(ellipse at 82% 0%,rgba(230,28,42,.065),transpare
 @media(max-width:380px){.registration-first .registration-success{min-height:440px;padding-inline:17px}}
 
 /* Keep the content inside display cutouts in portrait and landscape phones. */
-@media(max-width:650px){
+@media(max-width:850px){
   .wrap{width:calc(100% - max(24px,env(safe-area-inset-left,0px) + env(safe-area-inset-right,0px)))}
 }
 @media(max-width:380px){
