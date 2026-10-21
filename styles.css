@@ -201,6 +201,8 @@ body{background:radial-gradient(ellipse at 82% 0%,rgba(230,28,42,.065),transpare
 
 /* Registration screen: one centered card at every viewport, with mobile-first controls. */
 :root{--font:"Cairo",sans-serif;--display:"Cairo",sans-serif}
+/* Decorative glows must not extend the RTL document's horizontal scroll area. */
+.ambient{position:fixed}
 html,body{max-width:100%}
 body{overflow-x:hidden;font-family:"Cairo",sans-serif}
 .wrap{width:min(1160px,calc(100% - 32px));margin-inline:auto}
