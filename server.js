@@ -51,6 +51,10 @@ function cookie(value, maxAge) {
   return `hu_admin_session=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${isProduction ? '; Secure' : ''}`;
 }
 
+function registrationDeviceCookie(value) {
+  return `hu_registration_device=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${isProduction ? '; Secure' : ''}`;
+}
+
 function sameOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return true;
@@ -112,11 +116,14 @@ async function initDatabase() {
     full_name TEXT NOT NULL,
     phone TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL,
+    device_hash TEXT,
     major TEXT NOT NULL,
     study_year TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
+  await pool.query('ALTER TABLE registrants ADD COLUMN IF NOT EXISTS device_hash TEXT');
   await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS registrants_email_unique ON registrants (LOWER(email))');
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS registrants_device_hash_unique ON registrants (device_hash) WHERE device_hash IS NOT NULL');
 }
 
 function sendFile(res, pathname) {
@@ -164,13 +171,19 @@ async function handler(req, res) {
       const cleaned = cleanRegistration(input);
       if (cleaned.error) return json(res, 400, { error: 'validation_error', field: cleaned.error, message: 'يرجى مراجعة البيانات المطلوبة.' });
       const { fullName, phone, email, major, year } = cleaned.value;
+      const deviceCookie = cookies(req).hu_registration_device || '';
+      const suppliedDeviceId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(input.deviceId || '')) ? String(input.deviceId).toLowerCase() : '';
+      const deviceId = deviceCookie || suppliedDeviceId || crypto.randomBytes(32).toString('base64url');
+      const deviceHash = crypto.createHash('sha256').update(deviceId).digest('hex');
       try {
-        const result = await pool.query('INSERT INTO registrants (full_name, phone, email, major, study_year) VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at AS "createdAt"', [fullName, phone, email, major, year]);
-        return json(res, 201, { registered: true, id: result.rows[0].id, createdAt: result.rows[0].createdAt });
+        const result = await pool.query('INSERT INTO registrants (full_name, phone, email, device_hash, major, study_year) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at AS "createdAt"', [fullName, phone, email, deviceHash, major, year]);
+        const headers = deviceCookie ? {} : { 'Set-Cookie': registrationDeviceCookie(deviceId) };
+        return json(res, 201, { registered: true, id: result.rows[0].id, createdAt: result.rows[0].createdAt }, headers);
       } catch (error) {
         if (error.code === '23505') {
-          const field = error.constraint === 'registrants_phone_key' ? 'phone' : 'email';
-          return json(res, 409, { error: 'duplicate', field, message: field === 'phone' ? 'رقم الهاتف مسجّل مسبقاً.' : 'البريد الإلكتروني مسجّل مسبقاً.' });
+          const field = error.constraint === 'registrants_phone_key' ? 'phone' : error.constraint === 'registrants_device_hash_unique' ? 'device' : 'email';
+          const message = field === 'phone' ? 'رقم الهاتف مسجّل مسبقاً.' : field === 'device' ? 'هذا الجهاز مسجّل مسبقاً، ولا يمكنه التسجيل مرة أخرى.' : 'البريد الإلكتروني مسجّل مسبقاً.';
+          return json(res, 409, { error: 'duplicate', field, message });
         }
         throw error;
       }
