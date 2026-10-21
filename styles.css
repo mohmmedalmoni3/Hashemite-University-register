@@ -125,30 +125,30 @@ body{background:radial-gradient(ellipse at 82% 0%,rgba(230,28,42,.065),transpare
 /* Fixed phone viewport: larger, full-width touch fields with no side pan or zoom. */
 @media(max-width:650px){
   html,body{width:100%;max-width:100%;overflow-x:clip;overscroll-behavior-x:none;touch-action:pan-y}
-  .wrap{width:calc(100% - 32px);max-width:100%;margin-inline:auto}
+  .wrap{width:calc(100% - 24px);max-width:100%;margin-inline:auto}
   .topbar,.registration-first,.registration-first>*{min-width:0;max-width:100%}
   .registration-first{gap:16px;padding-block:16px 24px}
-  .registration-first .registration-form{width:100%;padding:25px 20px 21px;border:1px solid #e5e8ee;border-radius:16px;overflow:hidden}
-  .registration-first .form-top{gap:12px;margin-bottom:21px}
-  .registration-first .form-label{font-size:19px;line-height:1.65}
+  .registration-first .registration-form{width:100%;padding:25px 18px 22px;border:1px solid #e5e8ee;border-radius:16px;overflow:hidden}
+  .registration-first .form-top{gap:12px;margin-bottom:23px}
+  .registration-first .form-label{font-size:20px;line-height:1.65}
   .registration-first .form-top p{font-size:12px;line-height:1.8}
   .registration-first .secure-badge{margin-top:8px;padding:8px 10px;font-size:10px}
-  .registration-first .form-grid{gap:16px}
-  .registration-first .field-label{margin-bottom:8px;font-size:14px;line-height:1.7}
+  .registration-first .form-grid{gap:19px}
+  .registration-first .field-label{margin-bottom:9px;font-size:15px;line-height:1.7}
   .registration-first .input-wrap{width:100%;min-width:0}
-  .registration-first .input-wrap input,.registration-first .input-wrap select{height:60px;padding-inline:45px 15px;border-radius:11px;font-size:17px}
-  .registration-first .input-wrap input::placeholder{font-size:14px}
+  .registration-first .input-wrap input,.registration-first .input-wrap select{height:72px;padding-inline:48px 16px;border-radius:12px;font-size:18px}
+  .registration-first .input-wrap input::placeholder{font-size:15px}
   .registration-first .input-wrap input[name="phone"],.registration-first .input-wrap input[name="email"]{padding-inline:45px 15px}
-  .registration-first .input-icon{width:43px;font-size:15px}
-  .registration-first .input-wrap:has(select)::after{left:15px}
-  .registration-first .consent{min-height:52px;gap:12px;margin:15px 0 17px;font-size:12px;line-height:1.9}
-  .registration-first .custom-checkbox{width:22px;height:22px;flex-basis:22px}
-  .registration-first .submit-button{width:100%;min-height:60px;height:60px;border-radius:11px;font-size:15px}
+  .registration-first .input-icon{width:46px;font-size:16px}
+  .registration-first .input-wrap:has(select)::after{left:16px}
+  .registration-first .consent{min-height:56px;gap:12px;margin:16px 0 19px;font-size:13px;line-height:1.9}
+  .registration-first .custom-checkbox{width:23px;height:23px;flex-basis:23px}
+  .registration-first .submit-button{width:100%;min-height:66px;height:66px;border-radius:12px;font-size:16px}
   .registration-first .form-footnote{font-size:11px;line-height:1.8}
   .registration-intro{width:100%;overflow:hidden}
 }
 @media(max-width:380px){
-  .wrap{width:calc(100% - 24px)}
-  .registration-first .registration-form{padding:22px 16px 19px}
-  .registration-first .form-grid{gap:14px}
+  .wrap{width:calc(100% - 20px)}
+  .registration-first .registration-form{padding:22px 14px 19px}
+  .registration-first .form-grid{gap:17px}
 }
