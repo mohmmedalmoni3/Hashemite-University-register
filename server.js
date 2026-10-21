@@ -151,7 +151,9 @@ async function handler(req, res) {
     if (!pool) return json(res, 503, { error: 'server_not_configured', message: 'Database is not configured.' });
     if (req.method !== 'GET' && !sameOrigin(req)) return json(res, 403, { error: 'origin_rejected' });
     if (req.method === 'GET' && url.pathname === '/api/register/status') {
-      const deviceId = cookies(req).hu_registration_device;
+      const suppliedDeviceId = String(req.headers['x-registration-device'] || '');
+      const validSuppliedDeviceId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suppliedDeviceId) ? suppliedDeviceId.toLowerCase() : '';
+      const deviceId = cookies(req).hu_registration_device || validSuppliedDeviceId;
       if (!deviceId) return json(res, 200, { registered: false });
       const deviceHash = crypto.createHash('sha256').update(deviceId).digest('hex');
       const result = await pool.query('SELECT 1 FROM registrants WHERE device_hash = $1 LIMIT 1', [deviceHash]);

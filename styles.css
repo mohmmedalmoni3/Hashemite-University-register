@@ -168,7 +168,7 @@ body{background:radial-gradient(ellipse at 82% 0%,rgba(230,28,42,.065),transpare
 
 .registration-panel{min-width:0;width:100%}
 .registration-form[hidden],.registration-success[hidden]{display:none!important}
-.registration-success{position:relative;display:flex;min-height:100%;flex-direction:column;align-items:center;justify-content:center;padding:38px 34px 30px;overflow:hidden;border:1px solid #e8e3e4;border-radius:16px;background:linear-gradient(160deg,#fff 0%,#fff 72%,#fffafa 100%);box-shadow:0 18px 48px rgba(49,32,32,.08);text-align:center}
+.registration-success{position:relative;display:flex;min-height:100%;flex-direction:column;align-items:center;justify-content:center;padding:38px 34px 30px;overflow:hidden;border:1px solid #e8e3e4;border-radius:16px;background:linear-gradient(160deg,#fff 0%,#fff 72%,#fffafa 100%);box-shadow:0 18px 48px rgba(49,32,32,.08);text-align:center;outline:none;-webkit-tap-highlight-color:transparent}
 .registration-success::before{position:absolute;top:-110px;right:-100px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(201,33,43,.07),transparent 72%);content:"";pointer-events:none}
 .registration-success .success-art{margin:0 auto 16px}
 .registration-success .success-eyebrow{justify-content:center}

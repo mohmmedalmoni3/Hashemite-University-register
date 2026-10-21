@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=registration-state-20261021">
 </head>
 <body>
   <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
@@ -46,7 +46,7 @@
         <button class="primary-button submit-button" type="submit"><span class="submit-text">إرسال طلب التسجيل</span><span class="submit-arrow" aria-hidden="true">←</span><span class="button-spinner"></span></button>
         <p class="form-footnote"><span>✳</span> تسجيل واحد فقط من الجهاز نفسه، وبرقم هاتف وبريد إلكتروني واحد.</p>
       </form>
-      <section class="registration-success" id="registrationSuccess" aria-live="polite" tabindex="-1" hidden>
+      <section class="registration-success" id="registrationSuccess" role="status" aria-live="polite" aria-atomic="true" hidden>
         <div class="success-art"><span>✓</span><i class="success-star star-a">✳</i><i class="success-star star-b">✦</i><i class="success-star star-c">✳</i></div>
         <div class="eyebrow success-eyebrow"><span class="live-dot"></span><span id="successEyebrow">اكتمل التسجيل بنجاح</span></div>
         <h2 id="successTitle">أنت مسجل<span>.</span></h2>
@@ -62,6 +62,6 @@
     <footer class="footer"><span>© 2026 الجامعة الهاشمية × Step by Step</span><a href="admin.html">بوابة الإدارة ↗</a><span>صُمّم بعناية في الأردن <span class="footer-heart">✳</span></span></footer>
   </main>
   <div class="toast" id="toast" role="alert" aria-live="polite"></div>
-  <script src="app.js?v=registration-confirmation-20261021"></script>
+  <script src="app.js?v=registration-state-20261021"></script>
 </body>
 </html>

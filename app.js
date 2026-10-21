@@ -5,6 +5,7 @@
   const fields = [...form.querySelectorAll('.field')];
   const DEVICE_ID_KEY = 'hu_registration_device_id';
   const DEVICE_REGISTERED_KEY = 'hu_registration_device_registered';
+  let registrationConfirmed = false;
   const getDeviceId = () => {
     try {
       let id = localStorage.getItem(DEVICE_ID_KEY);
@@ -133,6 +134,7 @@
   });
   function escapeHtml(text) { return text.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]); }
   function showRegisteredState(fullName = '', state = 'already') {
+    registrationConfirmed = true;
     form.hidden = true;
     registrationSuccess.hidden = false;
     document.querySelector('#successTitle').innerHTML = 'أنت مسجل<span>.</span>';
@@ -144,22 +146,34 @@
     registrationSuccess.classList.toggle('device-already-registered', !isSuccess);
     document.querySelector('#successDeviceNote').classList.toggle('device-already-registered', !isSuccess);
     registrationSuccess.classList.add('registration-success-visible');
-    registrationSuccess.focus({ preventScroll: true });
   }
   function showAlreadyRegistered() {
     showRegisteredState();
   }
   async function restoreRegisteredState() {
+    let localConfirmation = false;
     try {
-      if (localStorage.getItem(DEVICE_REGISTERED_KEY) === '1') { showRegisteredState(); return; }
-      const response = await fetch('/api/register/status', { headers: { Accept: 'application/json' } });
+      localConfirmation = localStorage.getItem(DEVICE_REGISTERED_KEY) === '1';
+      if (localConfirmation && !registrationConfirmed) showRegisteredState();
+      const deviceId = getDeviceId();
+      const response = await fetch('/api/register/status', {
+        cache: 'no-store',
+        headers: { Accept: 'application/json', 'X-Registration-Device': deviceId }
+      });
       if (!response.ok) return;
       const result = await response.json();
+      if (registrationConfirmed) return;
       if (result.registered) {
         try { localStorage.setItem(DEVICE_REGISTERED_KEY, '1'); } catch {}
         showRegisteredState();
+      } else {
+        try { localStorage.removeItem(DEVICE_REGISTERED_KEY); } catch {}
+        form.hidden = false;
+        registrationSuccess.hidden = true;
       }
-    } catch {}
+    } catch {
+      if (localConfirmation && !registrationConfirmed) showRegisteredState();
+    }
   }
   restoreRegisteredState();
   const observer = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('revealed'); observer.unobserve(entry.target); } }), { threshold: 0.1 });
