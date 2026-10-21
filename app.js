@@ -4,7 +4,6 @@
   const toast = document.querySelector('#toast');
   const fields = [...form.querySelectorAll('.field')];
   const DEVICE_ID_KEY = 'hu_registration_device_id';
-  const DEVICE_REGISTERED_KEY = 'hu_registration_device_registered';
   let registrationConfirmed = false;
   const getDeviceId = () => {
     try {
@@ -68,12 +67,8 @@
   form.querySelector('[name="consent"]').addEventListener('change', event => event.target.closest('.consent').classList.toggle('consent-invalid', !event.target.checked));
   form.addEventListener('submit', async event => {
     event.preventDefault();
-    try {
-      if (localStorage.getItem(DEVICE_REGISTERED_KEY) === '1') {
-        showAlreadyRegistered();
-        return;
-      }
-    } catch {}
+    // A browser-side flag can outlive a deleted database row. The database
+    // remains authoritative; the server enforces duplicates during submit.
     const results = fields.map(field => validate(field, []));
     const checkbox = form.querySelector('[name="consent"]');
     checkbox.closest('.consent').classList.toggle('consent-invalid', !checkbox.checked);
@@ -94,7 +89,6 @@
       // confirmation as soon as those headers arrive; parsing the response
       // body must not be able to block the success state.
       if (response.ok) {
-        try { localStorage.setItem(DEVICE_REGISTERED_KEY, '1'); } catch {}
         showRegisteredState(entry.fullName, 'success');
         form.reset(); fields.forEach(field => { field.classList.remove('field-valid', 'field-invalid'); field.querySelector('.field-error').textContent = ''; });
         return;
@@ -103,14 +97,12 @@
       try { result = await response.json(); } catch {}
       if (response.status === 409) {
         if (result.field === 'device') {
-          try { localStorage.setItem(DEVICE_REGISTERED_KEY, '1'); } catch {}
           showAlreadyRegistered();
           return;
         }
         // Older registrations may predate device tracking. A duplicate phone
         // or email still means this submitted registration already exists.
         if (result.field === 'phone' || result.field === 'email') {
-          try { localStorage.setItem(DEVICE_REGISTERED_KEY, '1'); } catch {}
           showRegisteredState('', 'duplicate');
           return;
         }
@@ -151,10 +143,7 @@
     showRegisteredState();
   }
   async function restoreRegisteredState() {
-    let localConfirmation = false;
     try {
-      localConfirmation = localStorage.getItem(DEVICE_REGISTERED_KEY) === '1';
-      if (localConfirmation && !registrationConfirmed) showRegisteredState();
       const deviceId = getDeviceId();
       const response = await fetch('/api/register/status', {
         cache: 'no-store',
@@ -164,15 +153,18 @@
       const result = await response.json();
       if (registrationConfirmed) return;
       if (result.registered) {
-        try { localStorage.setItem(DEVICE_REGISTERED_KEY, '1'); } catch {}
         showRegisteredState();
       } else {
-        try { localStorage.removeItem(DEVICE_REGISTERED_KEY); } catch {}
         form.hidden = false;
         registrationSuccess.hidden = true;
       }
     } catch {
-      if (localConfirmation && !registrationConfirmed) showRegisteredState();
+      // If the database cannot confirm a registration, never show a stale
+      // success screen based on data stored only in this browser.
+      if (!registrationConfirmed) {
+        form.hidden = false;
+        registrationSuccess.hidden = true;
+      }
     }
   }
   restoreRegisteredState();
