@@ -184,15 +184,17 @@ async function handler(req, res) {
       const suppliedDeviceId = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(input.deviceId || '')) ? String(input.deviceId).toLowerCase() : '';
       const deviceId = deviceCookie || suppliedDeviceId || crypto.randomBytes(32).toString('base64url');
       const deviceHash = crypto.createHash('sha256').update(deviceId).digest('hex');
-      const existingDevice = await pool.query('SELECT 1 FROM registrants WHERE device_hash = $1 LIMIT 1', [deviceHash]);
-      if (existingDevice.rowCount) return json(res, 409, { error: 'duplicate', field: 'device', message: 'هذا الجهاز مسجّل مسبقاً، ولا يمكنه التسجيل مرة أخرى.' });
       try {
         const result = await pool.query('INSERT INTO registrants (full_name, phone, email, device_hash, major, study_year) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at AS "createdAt"', [fullName, phone, email, deviceHash, major, year]);
         const headers = deviceCookie ? {} : { 'Set-Cookie': registrationDeviceCookie(deviceId) };
         return json(res, 201, { registered: true, id: result.rows[0].id, createdAt: result.rows[0].createdAt }, headers);
       } catch (error) {
         if (error.code === '23505') {
-          const field = error.constraint === 'registrants_phone_key' ? 'phone' : error.constraint === 'registrants_device_hash_unique' ? 'device' : 'email';
+          let field = error.constraint === 'registrants_phone_key' ? 'phone' : error.constraint === 'registrants_device_hash_unique' ? 'device' : 'email';
+          if (field !== 'device') {
+            const existingDevice = await pool.query('SELECT 1 FROM registrants WHERE device_hash = $1 LIMIT 1', [deviceHash]);
+            if (existingDevice.rowCount) field = 'device';
+          }
           const message = field === 'phone' ? 'رقم الهاتف مسجّل مسبقاً.' : field === 'device' ? 'هذا الجهاز مسجّل مسبقاً، ولا يمكنه التسجيل مرة أخرى.' : 'البريد الإلكتروني مسجّل مسبقاً.';
           return json(res, 409, { error: 'duplicate', field, message });
         }
