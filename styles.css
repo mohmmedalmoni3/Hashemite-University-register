@@ -57,7 +57,6 @@ body{background:radial-gradient(ellipse at 80% 0%,rgba(201,230,220,.47),transpar
 @media(max-width:850px){.registration-first{grid-template-columns:.76fr 1.24fr;gap:14px}.registration-intro{padding-inline:25px}}
 @media(max-width:650px){.registration-first{grid-template-columns:1fr;gap:12px;padding-block:22px 24px}.registration-intro{min-height:276px;padding:26px 22px}.registration-intro h1{font-size:36px}.registration-intro>p{font-size:10px}.intro-points{flex-direction:row}.registration-form{padding:23px 18px}.form-label{font-size:15px}}
 /* Hashemite University inspired visual identity: crimson, charcoal and clean white. */
-@import url('https://fonts.googleapis.com/css2?family=Alexandria:wght@400;500;600;700;800&family=Readex+Pro:wght@400;500;600;700&display=swap');
 :root{--ink:#202126;--muted:#777982;--purple:#c9212b;--purple-deep:#a81722;--lavender:#f9e8e9;--coral:#d4454c;--line:#e8e7e7;--surface:#fff;--page:#f7f7f7;--green:#4e8a70;--font:"Readex Pro",sans-serif;--display:"Readex Pro",sans-serif}
 body{background:radial-gradient(ellipse at 82% 0%,rgba(230,28,42,.065),transparent 33%),#f7f7f7;color:#202126;font-family:"Readex Pro",sans-serif;font-size:14px;letter-spacing:0}
 .topbar{border-bottom-color:#e6e3e3}.brand{border-color:#e9e5e5;background:#fff;box-shadow:0 3px 12px rgba(38,24,24,.035)}.nav a,.back-link{color:#66676f}.nav .nav-admin{color:#bd202a;border-color:#f0d4d6;background:#fffafa}
@@ -71,3 +70,54 @@ body{background:radial-gradient(ellipse at 82% 0%,rgba(230,28,42,.065),transpare
 .success-dialog h2,.success-detail,.success-message{font-family:"Readex Pro",sans-serif}
 @media(max-width:850px){.registration-first{grid-template-columns:.76fr 1.24fr;gap:14px}.registration-intro{padding-inline:25px}}
 @media(max-width:650px){.registration-first{grid-template-columns:1fr;gap:12px;padding-block:22px 24px}.registration-intro{min-height:276px;padding:26px 22px}.registration-intro h1{font-size:36px}.registration-intro>p{font-size:10px}.intro-points{flex-direction:row}.registration-form{padding:23px 18px}.form-label{font-size:15px}}
+/* Phone-first registration ergonomics */
+@media(max-width:650px){
+  html{scroll-padding-top:12px}
+  .wrap{width:calc(100% - 28px)}
+  .topbar{height:68px}
+  .brand{gap:9px}
+  .brand-university{width:38px;height:38px}
+  .brand-academy{width:88px;height:42px}
+  .registration-first{display:flex;flex-direction:column;gap:13px;padding:15px 0 22px}
+  .registration-first .registration-form{order:-1;padding:21px 17px 17px;border-radius:12px}
+  .registration-first .form-top{align-items:flex-start;margin-bottom:17px}
+  .registration-first .form-label{font-size:16px;line-height:1.5}
+  .registration-first .form-top p{font-size:10px;line-height:1.7}
+  .registration-first .secure-badge{flex:none;margin-top:13px;padding:7px 8px;font-size:8px}
+  .registration-first .form-grid{grid-template-columns:minmax(0,1fr);gap:9px}
+  .registration-first .field,.registration-first .full-field{grid-column:1/-1;min-width:0}
+  .registration-first .field-label{margin-bottom:5px;font-size:11px;line-height:1.6}
+  .registration-first .input-wrap input,.registration-first .input-wrap select{width:100%;height:49px;padding-right:39px;padding-left:13px;border-radius:8px;font-size:16px;line-height:1.4}
+  .registration-first .input-wrap input::placeholder{font-size:13px}
+  .registration-first .input-wrap input[name="phone"],.registration-first .input-wrap input[name="email"]{direction:ltr;text-align:left;padding-left:39px;padding-right:13px}
+  .registration-first .input-wrap:has(select)::after{left:14px}
+  .registration-first .field-error{font-size:10px;line-height:1.55}
+  .registration-first .consent{min-height:44px;align-items:center;gap:10px;margin:10px 0 12px;font-size:10px;line-height:1.75}
+  .registration-first .custom-checkbox{width:19px;height:19px;flex:0 0 19px}
+  .registration-first .submit-button{min-height:52px;height:52px;padding-inline:16px;border-radius:8px;font-size:12px}
+  .registration-first .form-footnote{align-items:flex-start;margin-top:11px;font-size:9px;line-height:1.7}
+  .registration-first .form-footnote span{flex:none}
+  .registration-intro{order:1;min-height:0;padding:22px 20px;border-radius:12px}
+  .registration-intro h1{margin:11px 0 7px;font-size:30px;line-height:1.48}
+  .registration-intro>p{max-width:440px;font-size:10px;line-height:1.9}
+  .registration-intro .intro-partners{display:none}
+  .registration-intro .intro-points{flex-direction:row;flex-wrap:wrap;gap:13px 20px;margin-top:16px}
+  .registration-intro .intro-points>div{grid-template-columns:20px auto;column-gap:5px}
+  .registration-intro .intro-points b{font-size:9px}
+  .registration-intro .intro-points small{font-size:8px}
+  .registration-intro .intro-decoration{width:190px;height:190px;left:-74px;bottom:-86px}
+  .program-strip{margin-top:0}
+}
+@media(max-width:380px){
+  .wrap{width:calc(100% - 24px)}
+  .brand{gap:7px}
+  .brand-university{width:35px;height:35px}
+  .brand-academy{width:78px;height:38px}
+  .brand-divider{height:27px}
+  .registration-first .registration-form{padding:19px 14px 15px}
+  .registration-first .form-grid{gap:8px}
+  .registration-first .form-top{gap:8px}
+  .registration-first .secure-badge{padding:6px;font-size:7px}
+  .registration-intro{padding-inline:17px}
+  .registration-intro h1{font-size:28px}
+}
