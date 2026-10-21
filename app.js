@@ -89,11 +89,28 @@
     submitButton.querySelector('.submit-text').textContent = 'جارٍ حفظ التسجيل…';
     try {
       const response = await fetch('/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(entry) });
-      const result = await response.json();
+      // A 201 is sent only after the database insert succeeds. Render the
+      // confirmation as soon as those headers arrive; parsing the response
+      // body must not be able to block the success state.
+      if (response.ok) {
+        try { localStorage.setItem(DEVICE_REGISTERED_KEY, '1'); } catch {}
+        showRegisteredState(entry.fullName, 'success');
+        form.reset(); fields.forEach(field => { field.classList.remove('field-valid', 'field-invalid'); field.querySelector('.field-error').textContent = ''; });
+        return;
+      }
+      let result = {};
+      try { result = await response.json(); } catch {}
       if (response.status === 409) {
         if (result.field === 'device') {
           try { localStorage.setItem(DEVICE_REGISTERED_KEY, '1'); } catch {}
           showAlreadyRegistered();
+          return;
+        }
+        // Older registrations may predate device tracking. A duplicate phone
+        // or email still means this submitted registration already exists.
+        if (result.field === 'phone' || result.field === 'email') {
+          try { localStorage.setItem(DEVICE_REGISTERED_KEY, '1'); } catch {}
+          showRegisteredState('', 'duplicate');
           return;
         }
         const duplicateField = form.querySelector(`[name="${result.field}"]`);
@@ -113,20 +130,19 @@
       submitButton.disabled = false;
       submitButton.querySelector('.submit-text').textContent = 'إرسال طلب التسجيل';
     }
-    try { localStorage.setItem(DEVICE_REGISTERED_KEY, '1'); } catch {}
-    showRegisteredState(entry.fullName);
-    form.reset(); fields.forEach(field => { field.classList.remove('field-valid', 'field-invalid'); field.querySelector('.field-error').textContent = ''; });
   });
   function escapeHtml(text) { return text.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]); }
-  function showRegisteredState(fullName = '') {
+  function showRegisteredState(fullName = '', state = 'already') {
     form.hidden = true;
     registrationSuccess.hidden = false;
     document.querySelector('#successTitle').innerHTML = 'أنت مسجل<span>.</span>';
-    document.querySelector('#successEyebrow').textContent = fullName ? 'اكتمل التسجيل بنجاح' : 'تم التحقق من حالة التسجيل';
-    document.querySelector('#successMessage').innerHTML = fullName ? `أهلاً <b>${escapeHtml(fullName)}</b>، تم تأكيد تسجيلك.` : 'سبق لهذا الجهاز إكمال طلب التسجيل.';
-    document.querySelector('#successDetail').innerHTML = fullName ? 'سنكون على تواصل معك قريباً.<br><b>نتمنى لك رحلة مليئة بالإنجاز!</b>' : 'نحافظ على عدالة الفرصة للجميع.<br><b>لا يمكن إرسال طلب آخر من هذا الجهاز.</b>';
-    registrationSuccess.classList.toggle('device-already-registered', !fullName);
-    document.querySelector('#successDeviceNote').classList.toggle('device-already-registered', !fullName);
+    const isSuccess = state === 'success';
+    const isDuplicate = state === 'duplicate';
+    document.querySelector('#successEyebrow').textContent = isSuccess ? 'اكتمل التسجيل بنجاح' : isDuplicate ? 'تم العثور على تسجيل سابق' : 'تم التحقق من حالة التسجيل';
+    document.querySelector('#successMessage').innerHTML = isSuccess ? `أهلاً <b>${escapeHtml(fullName)}</b>، تم تأكيد تسجيلك.` : isDuplicate ? 'رقم الهاتف أو البريد الإلكتروني الذي أدخلته مرتبط بطلب تسجيل سابق.' : 'سبق لهذا الجهاز إكمال طلب التسجيل.';
+    document.querySelector('#successDetail').innerHTML = isSuccess ? 'سنكون على تواصل معك قريباً.<br><b>نتمنى لك رحلة مليئة بالإنجاز!</b>' : isDuplicate ? 'تم حفظ طلب التسجيل من قبل.<br><b>لا حاجة لإرساله مرة أخرى.</b>' : 'نحافظ على عدالة الفرصة للجميع.<br><b>لا يمكن إرسال طلب آخر من هذا الجهاز.</b>';
+    registrationSuccess.classList.toggle('device-already-registered', !isSuccess);
+    document.querySelector('#successDeviceNote').classList.toggle('device-already-registered', !isSuccess);
     registrationSuccess.classList.add('registration-success-visible');
     registrationSuccess.focus({ preventScroll: true });
   }
