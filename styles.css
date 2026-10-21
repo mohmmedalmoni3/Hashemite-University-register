@@ -165,3 +165,27 @@ body{background:radial-gradient(ellipse at 82% 0%,rgba(230,28,42,.065),transpare
   .success-device-note p{font-size:11px}
 }
 @media(max-width:380px){.success-dialog{padding:23px 18px 18px}.success-brand{margin-top:13px}}
+
+.registration-panel{min-width:0;width:100%}
+.registration-form[hidden],.registration-success[hidden]{display:none!important}
+.registration-success{position:relative;display:flex;min-height:100%;flex-direction:column;align-items:center;justify-content:center;padding:38px 34px 30px;overflow:hidden;border:1px solid #e8e3e4;border-radius:16px;background:linear-gradient(160deg,#fff 0%,#fff 72%,#fffafa 100%);box-shadow:0 18px 48px rgba(49,32,32,.08);text-align:center}
+.registration-success::before{position:absolute;top:-110px;right:-100px;width:260px;height:260px;border-radius:50%;background:radial-gradient(circle,rgba(201,33,43,.07),transparent 72%);content:"";pointer-events:none}
+.registration-success .success-art{margin:0 auto 16px}
+.registration-success .success-eyebrow{justify-content:center}
+.registration-success h2{margin:12px 0 5px;font:700 clamp(27px,3vw,34px)/1.5 "Readex Pro",sans-serif;letter-spacing:-.04em}
+.registration-success h2 span{color:#c9212b}
+.registration-success .success-message{margin:4px 0 0;font-size:14px;line-height:1.9}
+.registration-success .success-divider{width:44px;margin:18px auto}
+.registration-success .success-detail{margin:0 0 18px;font-size:12px;line-height:2}
+.registration-success .success-device-note{width:min(100%,380px);margin:0 auto 17px;text-align:right}
+.registration-success .success-brand{margin-top:3px}
+.registration-success-visible{animation:registration-state-in .55s cubic-bezier(.2,.7,.3,1) both}
+.registration-success.device-already-registered .success-art>span{background:#c9212b}
+@keyframes registration-state-in{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:translateY(0) scale(1)}}
+@media(max-width:650px){
+  .registration-first .registration-panel{order:-1;width:100%;max-width:100%}
+  .registration-first .registration-success{min-height:480px;padding:32px 22px 26px;border-radius:16px}
+  .registration-success .success-message{font-size:15px}
+  .registration-success .success-detail{font-size:12px}
+}
+@media(max-width:380px){.registration-first .registration-success{min-height:440px;padding-inline:17px}}

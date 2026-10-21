@@ -134,7 +134,9 @@ function sendFile(res, pathname) {
   try { stat = fs.statSync(filePath); } catch { return false; }
   if (!stat.isFile()) return false;
   const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
-  res.writeHead(200, { 'Content-Type': types[path.extname(filePath)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'DENY', 'Cache-Control': path.extname(filePath) === '.html' ? 'no-cache' : 'public, max-age=3600' });
+  const extension = path.extname(filePath);
+  const cacheControl = ['.html', '.css', '.js'].includes(extension) ? 'no-cache' : 'public, max-age=3600';
+  res.writeHead(200, { 'Content-Type': types[extension] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'DENY', 'Cache-Control': cacheControl });
   fs.createReadStream(filePath).pipe(res);
   return true;
 }
@@ -148,6 +150,13 @@ async function handler(req, res) {
   if (url.pathname.startsWith('/api/')) {
     if (!pool) return json(res, 503, { error: 'server_not_configured', message: 'Database is not configured.' });
     if (req.method !== 'GET' && !sameOrigin(req)) return json(res, 403, { error: 'origin_rejected' });
+    if (req.method === 'GET' && url.pathname === '/api/register/status') {
+      const deviceId = cookies(req).hu_registration_device;
+      if (!deviceId) return json(res, 200, { registered: false });
+      const deviceHash = crypto.createHash('sha256').update(deviceId).digest('hex');
+      const result = await pool.query('SELECT 1 FROM registrants WHERE device_hash = $1 LIMIT 1', [deviceHash]);
+      return json(res, 200, { registered: result.rowCount > 0 });
+    }
     if (req.method === 'GET' && url.pathname === '/api/admin/session') return json(res, 200, { authenticated: validSession(req) });
     if (req.method === 'POST' && url.pathname === '/api/admin/login') {
       if (rateLimit(req, 'login', 10, 15 * 60 * 1000)) return json(res, 429, { error: 'rate_limited', message: 'محاولات كثيرة. حاول بعد قليل.' });

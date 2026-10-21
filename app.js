@@ -1,6 +1,6 @@
 (() => {
   const form = document.querySelector('#registrationForm');
-  const overlay = document.querySelector('#successOverlay');
+  const registrationSuccess = document.querySelector('#registrationSuccess');
   const toast = document.querySelector('#toast');
   const fields = [...form.querySelectorAll('.field')];
   const DEVICE_ID_KEY = 'hu_registration_device_id';
@@ -114,31 +114,38 @@
       submitButton.querySelector('.submit-text').textContent = 'إرسال طلب التسجيل';
     }
     try { localStorage.setItem(DEVICE_REGISTERED_KEY, '1'); } catch {}
-    document.querySelector('#successTitle').innerHTML = 'أنت مسجل<span>.</span>';
-    document.querySelector('#successEyebrow').textContent = 'اكتمل التسجيل بنجاح';
-    document.querySelector('#successMessage').innerHTML = `أهلاً <b>${escapeHtml(entry.fullName)}</b>، تم تأكيد تسجيلك.`;
-    document.querySelector('#successDetail').innerHTML = 'سنكون على تواصل معك قريباً.<br><b>نتمنى لك رحلة مليئة بالإنجاز!</b>';
-    document.querySelector('#successDeviceNote').classList.remove('device-already-registered');
-    document.querySelector('#successDone').innerHTML = 'شكراً لكم <span>✳</span>';
-    openDialog();
+    showRegisteredState(entry.fullName);
     form.reset(); fields.forEach(field => { field.classList.remove('field-valid', 'field-invalid'); field.querySelector('.field-error').textContent = ''; });
   });
   function escapeHtml(text) { return text.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]); }
-  function openDialog() { overlay.classList.add('overlay-visible'); overlay.setAttribute('aria-hidden', 'false'); document.body.classList.add('dialog-open'); document.querySelector('#closeDialog').focus(); }
-  function showAlreadyRegistered() {
-    document.querySelector('#successTitle').textContent = 'أنت مسجل بالفعل';
-    document.querySelector('#successEyebrow').textContent = 'تم التحقق من حالة التسجيل';
-    document.querySelector('#successMessage').textContent = 'سبق لهذا الجهاز إكمال طلب التسجيل.';
-    document.querySelector('#successDetail').innerHTML = 'نحافظ على عدالة الفرصة للجميع.<br><b>لا يمكن إرسال طلب آخر من هذا الجهاز.</b>';
-    document.querySelector('#successDeviceNote').classList.add('device-already-registered');
-    document.querySelector('#successDone').textContent = 'حسنًا';
-    openDialog();
+  function showRegisteredState(fullName = '') {
+    form.hidden = true;
+    registrationSuccess.hidden = false;
+    document.querySelector('#successTitle').innerHTML = 'أنت مسجل<span>.</span>';
+    document.querySelector('#successEyebrow').textContent = fullName ? 'اكتمل التسجيل بنجاح' : 'تم التحقق من حالة التسجيل';
+    document.querySelector('#successMessage').innerHTML = fullName ? `أهلاً <b>${escapeHtml(fullName)}</b>، تم تأكيد تسجيلك.` : 'سبق لهذا الجهاز إكمال طلب التسجيل.';
+    document.querySelector('#successDetail').innerHTML = fullName ? 'سنكون على تواصل معك قريباً.<br><b>نتمنى لك رحلة مليئة بالإنجاز!</b>' : 'نحافظ على عدالة الفرصة للجميع.<br><b>لا يمكن إرسال طلب آخر من هذا الجهاز.</b>';
+    registrationSuccess.classList.toggle('device-already-registered', !fullName);
+    document.querySelector('#successDeviceNote').classList.toggle('device-already-registered', !fullName);
+    registrationSuccess.classList.add('registration-success-visible');
+    registrationSuccess.focus({ preventScroll: true });
   }
-  const closeDialog = () => { overlay.classList.remove('overlay-visible'); overlay.setAttribute('aria-hidden', 'true'); document.body.classList.remove('dialog-open'); document.querySelector('#register').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
-  document.querySelector('#closeDialog').addEventListener('click', closeDialog);
-  document.querySelector('#successDone').addEventListener('click', closeDialog);
-  overlay.addEventListener('click', event => { if (event.target === overlay) closeDialog(); });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && overlay.classList.contains('overlay-visible')) closeDialog(); });
+  function showAlreadyRegistered() {
+    showRegisteredState();
+  }
+  async function restoreRegisteredState() {
+    try {
+      if (localStorage.getItem(DEVICE_REGISTERED_KEY) === '1') { showRegisteredState(); return; }
+      const response = await fetch('/api/register/status', { headers: { Accept: 'application/json' } });
+      if (!response.ok) return;
+      const result = await response.json();
+      if (result.registered) {
+        try { localStorage.setItem(DEVICE_REGISTERED_KEY, '1'); } catch {}
+        showRegisteredState();
+      }
+    } catch {}
+  }
+  restoreRegisteredState();
   const observer = new IntersectionObserver(entries => entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('revealed'); observer.unobserve(entry.target); } }), { threshold: 0.1 });
   document.querySelectorAll('.reveal').forEach(element => observer.observe(element));
 })();
