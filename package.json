@@ -1,0 +1,16 @@
+{
+  "name": "hashemite-step-registration",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Registration site and secured admin dashboard for the Hashemite University and Step by Step program.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  }
+}

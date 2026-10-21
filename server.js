@@ -1,0 +1,200 @@
+const http = require('node:http');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const { Pool } = require('pg');
+
+const ROOT = __dirname;
+const PORT = Number(process.env.PORT || 10000);
+const isProduction = process.env.NODE_ENV === 'production';
+const DATABASE_URL = process.env.DATABASE_URL;
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const SESSION_SECRET = process.env.SESSION_SECRET;
+const MAX_BODY = 16 * 1024;
+const SESSION_TTL = 8 * 60 * 60 * 1000;
+const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false }, max: 5, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000 }) : null;
+const rateLimits = new Map();
+
+function json(res, status, body, headers = {}) {
+  const data = JSON.stringify(body);
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers });
+  res.end(data);
+}
+
+function cookies(req) {
+  return Object.fromEntries((req.headers.cookie || '').split(';').map(part => part.trim()).filter(Boolean).map(part => {
+    const index = part.indexOf('=');
+    return index < 0 ? [part, ''] : [part.slice(0, index), decodeURIComponent(part.slice(index + 1))];
+  }));
+}
+
+function sessionToken(expires) {
+  const payload = Buffer.from(JSON.stringify({ exp: expires })).toString('base64url');
+  const signature = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
+  return `${payload}.${signature}`;
+}
+
+function validSession(req) {
+  if (!SESSION_SECRET) return false;
+  const token = cookies(req).hu_admin_session || '';
+  const [payload, signature, extra] = token.split('.');
+  if (!payload || !signature || extra) return false;
+  const expected = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest();
+  let actual;
+  try { actual = Buffer.from(signature, 'base64url'); } catch { return false; }
+  if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) return false;
+  try { return JSON.parse(Buffer.from(payload, 'base64url').toString()).exp > Date.now(); } catch { return false; }
+}
+
+function cookie(value, maxAge) {
+  return `hu_admin_session=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${isProduction ? '; Secure' : ''}`;
+}
+
+function sameOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try { return new URL(origin).host === req.headers.host; } catch { return false; }
+}
+
+function rateLimit(req, key, limit, windowMs) {
+  const now = Date.now();
+  const id = `${key}:${req.socket.remoteAddress || 'unknown'}`;
+  const state = rateLimits.get(id);
+  if (!state || state.until <= now) { rateLimits.set(id, { count: 1, until: now + windowMs }); return false; }
+  state.count += 1;
+  return state.count > limit;
+}
+
+async function bodyJson(req) {
+  const chunks = [];
+  let length = 0;
+  for await (const chunk of req) {
+    length += chunk.length;
+    if (length > MAX_BODY) throw Object.assign(new Error('too_large'), { status: 413 });
+    chunks.push(chunk);
+  }
+  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+  catch { throw Object.assign(new Error('invalid_json'), { status: 400 }); }
+}
+
+function normalizeDigits(value) {
+  return String(value).replace(/[٠-٩۰-۹]/g, char => {
+    const arabic = '٠١٢٣٤٥٦٧٨٩'.indexOf(char);
+    return String(arabic < 0 ? '۰۱۲۳۴۵۶۷۸۹'.indexOf(char) : arabic);
+  });
+}
+
+function normalizePhone(value) {
+  let phone = normalizeDigits(value).replace(/[\s()-]/g, '');
+  if (/^\+?962/.test(phone)) phone = `0${phone.replace(/^\+?962/, '')}`;
+  return phone;
+}
+
+function cleanRegistration(input) {
+  const fullName = String(input.fullName || '').trim().replace(/\s+/g, ' ');
+  const phone = normalizePhone(input.phone || '');
+  const email = String(input.email || '').trim().toLowerCase();
+  const major = String(input.major || '').trim();
+  const year = String(input.year || '').trim();
+  if (fullName.split(' ').length < 4 || fullName.length > 160) return { error: 'fullName' };
+  if (!/^07[789]\d{7}$/.test(phone)) return { error: 'phone' };
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return { error: 'email' };
+  if (!major || major.length > 120) return { error: 'major' };
+  if (!year || year.length > 80) return { error: 'year' };
+  if (input.consent !== true) return { error: 'consent' };
+  return { value: { fullName, phone, email, major, year } };
+}
+
+async function initDatabase() {
+  await pool.query(`CREATE TABLE IF NOT EXISTS registrants (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    full_name TEXT NOT NULL,
+    phone TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL,
+    major TEXT NOT NULL,
+    study_year TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS registrants_email_unique ON registrants (LOWER(email))');
+}
+
+function sendFile(res, pathname) {
+  const requested = pathname === '/' ? '/index.html' : pathname;
+  const filePath = path.resolve(ROOT, `.${decodeURIComponent(requested)}`);
+  if (!filePath.startsWith(`${ROOT}${path.sep}`)) return false;
+  let stat;
+  try { stat = fs.statSync(filePath); } catch { return false; }
+  if (!stat.isFile()) return false;
+  const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
+  res.writeHead(200, { 'Content-Type': types[path.extname(filePath)] || 'application/octet-stream', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'X-Frame-Options': 'DENY', 'Cache-Control': path.extname(filePath) === '.html' ? 'no-cache' : 'public, max-age=3600' });
+  fs.createReadStream(filePath).pipe(res);
+  return true;
+}
+
+async function handler(req, res) {
+  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  if (req.method === 'GET' && url.pathname === '/api/healthz') {
+    try { await pool.query('SELECT 1'); return json(res, 200, { status: 'ok' }); }
+    catch { return json(res, 503, { status: 'unavailable' }); }
+  }
+  if (url.pathname.startsWith('/api/')) {
+    if (!pool) return json(res, 503, { error: 'server_not_configured', message: 'Database is not configured.' });
+    if (req.method !== 'GET' && !sameOrigin(req)) return json(res, 403, { error: 'origin_rejected' });
+    if (req.method === 'GET' && url.pathname === '/api/admin/session') return json(res, 200, { authenticated: validSession(req) });
+    if (req.method === 'POST' && url.pathname === '/api/admin/login') {
+      if (rateLimit(req, 'login', 10, 15 * 60 * 1000)) return json(res, 429, { error: 'rate_limited', message: 'محاولات كثيرة. حاول بعد قليل.' });
+      const input = await bodyJson(req);
+      const user = String(input.username || '');
+      const pass = String(input.password || '');
+      const userOk = Buffer.from(user).length === Buffer.from(ADMIN_USERNAME || '').length && crypto.timingSafeEqual(Buffer.from(user), Buffer.from(ADMIN_USERNAME || ''));
+      const passOk = Buffer.from(pass).length === Buffer.from(ADMIN_PASSWORD || '').length && crypto.timingSafeEqual(Buffer.from(pass), Buffer.from(ADMIN_PASSWORD || ''));
+      if (!ADMIN_USERNAME || !ADMIN_PASSWORD || !SESSION_SECRET || !userOk || !passOk) return json(res, 401, { error: 'invalid_credentials', message: 'اسم المستخدم أو كلمة المرور غير صحيحة.' });
+      return json(res, 200, { authenticated: true }, { 'Set-Cookie': cookie(sessionToken(Date.now() + SESSION_TTL), Math.floor(SESSION_TTL / 1000)) });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/admin/logout') return json(res, 200, { authenticated: false }, { 'Set-Cookie': cookie('', 0) });
+    if (url.pathname.startsWith('/api/admin/') && !validSession(req)) return json(res, 401, { error: 'unauthorized', message: 'يرجى تسجيل الدخول للوصول إلى لوحة الإدارة.' });
+    if (req.method === 'GET' && url.pathname === '/api/admin/registrants') {
+      const result = await pool.query('SELECT id, full_name AS "fullName", phone, email, major, study_year AS year, created_at AS "createdAt" FROM registrants ORDER BY created_at DESC LIMIT 10000');
+      return json(res, 200, { registrants: result.rows });
+    }
+    if (req.method === 'POST' && url.pathname === '/api/register') {
+      if (rateLimit(req, 'register', 20, 60 * 60 * 1000)) return json(res, 429, { error: 'rate_limited', message: 'تم تجاوز عدد المحاولات. حاول لاحقاً.' });
+      const input = await bodyJson(req);
+      const cleaned = cleanRegistration(input);
+      if (cleaned.error) return json(res, 400, { error: 'validation_error', field: cleaned.error, message: 'يرجى مراجعة البيانات المطلوبة.' });
+      const { fullName, phone, email, major, year } = cleaned.value;
+      try {
+        const result = await pool.query('INSERT INTO registrants (full_name, phone, email, major, study_year) VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at AS "createdAt"', [fullName, phone, email, major, year]);
+        return json(res, 201, { registered: true, id: result.rows[0].id, createdAt: result.rows[0].createdAt });
+      } catch (error) {
+        if (error.code === '23505') {
+          const field = error.constraint === 'registrants_phone_key' ? 'phone' : 'email';
+          return json(res, 409, { error: 'duplicate', field, message: field === 'phone' ? 'رقم الهاتف مسجّل مسبقاً.' : 'البريد الإلكتروني مسجّل مسبقاً.' });
+        }
+        throw error;
+      }
+    }
+    return json(res, 404, { error: 'not_found' });
+  }
+  if (req.method === 'GET' && sendFile(res, url.pathname)) return;
+  return json(res, 404, { error: 'not_found' });
+}
+
+async function start() {
+  if (!DATABASE_URL) throw new Error('DATABASE_URL is required.');
+  if (!ADMIN_USERNAME || !ADMIN_PASSWORD) throw new Error('ADMIN_USERNAME and ADMIN_PASSWORD are required.');
+  if (!SESSION_SECRET || SESSION_SECRET.length < 32) throw new Error('SESSION_SECRET must contain at least 32 characters.');
+  await initDatabase();
+  const server = http.createServer((req, res) => handler(req, res).catch(error => {
+    if (!res.headersSent) json(res, error.status || 500, { error: error.message === 'too_large' ? 'request_too_large' : 'server_error', message: error.status ? 'تعذّر قراءة الطلب.' : 'حدث خطأ غير متوقع.' });
+    else res.destroy();
+    if (!isProduction) console.error(error);
+  }));
+  server.listen(PORT, '0.0.0.0', () => console.log(`Registration app listening on ${PORT}`));
+  const close = () => server.close(() => pool.end().finally(() => process.exit(0)));
+  process.on('SIGTERM', close);
+  process.on('SIGINT', close);
+}
+
+start().catch(error => { console.error(error.message); process.exit(1); });
