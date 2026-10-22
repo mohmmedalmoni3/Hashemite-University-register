@@ -61,14 +61,26 @@ function sameOrigin(req) {
   try { return new URL(origin).host === req.headers.host; } catch { return false; }
 }
 
+// Render يضع التطبيق خلف Reverse Proxy: عنوان العميل الحقيقي في X-Forwarded-For
+function clientIp(req) {
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwarded || req.socket.remoteAddress || 'unknown';
+}
+
 function rateLimit(req, key, limit, windowMs) {
   const now = Date.now();
-  const id = `${key}:${req.socket.remoteAddress || 'unknown'}`;
+  const id = `${key}:${clientIp(req)}`;
   const state = rateLimits.get(id);
   if (!state || state.until <= now) { rateLimits.set(id, { count: 1, until: now + windowMs }); return false; }
   state.count += 1;
   return state.count > limit;
 }
+
+// تنظيف دوري للعدّادات المنتهية
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, state] of rateLimits) if (state.until <= now) rateLimits.delete(id);
+}, 10 * 60 * 1000).unref();
 
 async function bodyJson(req) {
   const chunks = [];
@@ -177,7 +189,8 @@ async function handler(req, res) {
       return json(res, 200, { registrants: result.rows });
     }
     if (req.method === 'POST' && url.pathname === '/api/register') {
-      if (rateLimit(req, 'register', 20, 60 * 60 * 1000)) return json(res, 429, { error: 'rate_limited', message: 'تم تجاوز عدد المحاولات. حاول لاحقاً.' });
+      // الحد: 500 محاولة/ساعة لكل IP (يتحمّل قاعة كاملة على شبكة واحدة)
+      if (rateLimit(req, 'register', 500, 60 * 60 * 1000)) return json(res, 429, { error: 'rate_limited', message: 'تم تجاوز عدد المحاولات. حاول لاحقاً.' });
       const input = await bodyJson(req);
       const cleaned = cleanRegistration(input);
       if (cleaned.error) return json(res, 400, { error: 'validation_error', field: cleaned.error, message: 'يرجى مراجعة البيانات المطلوبة.' });
