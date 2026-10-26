@@ -2,10 +2,11 @@
   "name": "hashemite-step-registration",
   "version": "1.0.0",
   "private": true,
-  "description": "Registration site and secured admin dashboard for the Hashemite University and Step by Step program.",
+  "description": "IEEE Day 2026 registration site and secured admin dashboard.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "load-test": "k6 run scripts/registration-load-test.js"
   },
   "engines": {
     "node": ">=20"

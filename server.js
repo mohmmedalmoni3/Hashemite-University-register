@@ -13,8 +13,40 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 const SESSION_SECRET = process.env.SESSION_SECRET;
 const MAX_BODY = 16 * 1024;
 const SESSION_TTL = 8 * 60 * 60 * 1000;
-const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, ssl: { rejectUnauthorized: false }, max: 5, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000 }) : null;
+const POOL_KEY = Symbol.for('ieee-day.registration.pg-pool');
+// Reuse one small pool per Node isolate, including across serverless invocations.
+const pool = DATABASE_URL ? (globalThis[POOL_KEY] ||= new Pool({
+  connectionString: DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 4,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 5000,
+  query_timeout: 12000,
+  statement_timeout: 10000
+})) : null;
 const rateLimits = new Map();
+
+const RETRYABLE_DB_CODES = new Set([
+  '08000', '08001', '08003', '08006', '08007', '08P01', '57P01', '57P02', '57P03',
+  'ECONNRESET', 'ECONNREFUSED', 'ECONNABORTED', 'ETIMEDOUT', 'EPIPE', 'EHOSTUNREACH', 'EAI_AGAIN', 'ENETUNREACH'
+]);
+
+function isRetryableDatabaseError(error) {
+  return RETRYABLE_DB_CODES.has(error.code) || String(error.code || '').startsWith('08');
+}
+
+async function queryWithRetry(text, values) {
+  for (let attempt = 0; ; attempt += 1) {
+    try { return await pool.query(text, values); }
+    catch (error) {
+      if (!isRetryableDatabaseError(error) || attempt >= 2) throw error;
+      // Neon may need a moment to wake a suspended compute on the first query.
+      await new Promise(resolve => setTimeout(resolve, 150 * (attempt + 1)));
+    }
+  }
+}
+
+if (pool) pool.on('error', error => console.error('Idle database client error', { code: error.code || 'unknown' }));
 
 function json(res, status, body, headers = {}) {
   const data = JSON.stringify(body);
@@ -108,11 +140,15 @@ function normalizePhone(value) {
 }
 
 function cleanRegistration(input) {
-  const fullName = String(input.fullName || '').trim().replace(/\s+/g, ' ');
-  const phone = normalizePhone(input.phone || '');
-  const email = String(input.email || '').trim().toLowerCase();
-  const major = String(input.major || '').trim();
-  const year = String(input.year || '').trim();
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return { error: 'request' };
+  for (const key of ['fullName', 'phone', 'email', 'major', 'year']) {
+    if (typeof input[key] !== 'string') return { error: key };
+  }
+  const fullName = input.fullName.trim().replace(/\s+/g, ' ');
+  const phone = normalizePhone(input.phone);
+  const email = input.email.trim().toLowerCase();
+  const major = input.major.trim();
+  const year = input.year.trim();
   if (fullName.split(' ').length < 4 || fullName.length > 160) return { error: 'fullName' };
   if (!/^07[789]\d{7}$/.test(phone)) return { error: 'phone' };
   if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return { error: 'email' };
@@ -123,7 +159,7 @@ function cleanRegistration(input) {
 }
 
 async function initDatabase() {
-  await pool.query(`CREATE TABLE IF NOT EXISTS registrants (
+  await queryWithRetry(`CREATE TABLE IF NOT EXISTS registrants (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     full_name TEXT NOT NULL,
     phone TEXT NOT NULL UNIQUE,
@@ -133,9 +169,9 @@ async function initDatabase() {
     study_year TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
-  await pool.query('ALTER TABLE registrants ADD COLUMN IF NOT EXISTS device_hash TEXT');
-  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS registrants_email_unique ON registrants (LOWER(email))');
-  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS registrants_device_hash_unique ON registrants (device_hash) WHERE device_hash IS NOT NULL');
+  await queryWithRetry('ALTER TABLE registrants ADD COLUMN IF NOT EXISTS device_hash TEXT');
+  await queryWithRetry('CREATE UNIQUE INDEX IF NOT EXISTS registrants_email_unique ON registrants (LOWER(email))');
+  await queryWithRetry('CREATE UNIQUE INDEX IF NOT EXISTS registrants_device_hash_unique ON registrants (device_hash) WHERE device_hash IS NOT NULL');
 }
 
 function sendFile(res, pathname) {
@@ -156,7 +192,7 @@ function sendFile(res, pathname) {
 async function handler(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   if (req.method === 'GET' && url.pathname === '/api/healthz') {
-    try { await pool.query('SELECT 1'); return json(res, 200, { status: 'ok' }); }
+    try { await queryWithRetry('SELECT 1'); return json(res, 200, { status: 'ok' }); }
     catch { return json(res, 503, { status: 'unavailable' }); }
   }
   if (url.pathname.startsWith('/api/')) {
@@ -168,7 +204,7 @@ async function handler(req, res) {
       const deviceId = cookies(req).hu_registration_device || validSuppliedDeviceId;
       if (!deviceId) return json(res, 200, { registered: false });
       const deviceHash = crypto.createHash('sha256').update(deviceId).digest('hex');
-      const result = await pool.query('SELECT 1 FROM registrants WHERE device_hash = $1 LIMIT 1', [deviceHash]);
+      const result = await queryWithRetry('SELECT 1 FROM registrants WHERE device_hash = $1 LIMIT 1', [deviceHash]);
       return json(res, 200, { registered: result.rowCount > 0 });
     }
     if (req.method === 'GET' && url.pathname === '/api/admin/session') return json(res, 200, { authenticated: validSession(req) });
@@ -185,12 +221,12 @@ async function handler(req, res) {
     if (req.method === 'POST' && url.pathname === '/api/admin/logout') return json(res, 200, { authenticated: false }, { 'Set-Cookie': cookie('', 0) });
     if (url.pathname.startsWith('/api/admin/') && !validSession(req)) return json(res, 401, { error: 'unauthorized', message: 'يرجى تسجيل الدخول للوصول إلى لوحة الإدارة.' });
     if (req.method === 'GET' && url.pathname === '/api/admin/registrants') {
-      const result = await pool.query('SELECT id, full_name AS "fullName", phone, email, major, study_year AS year, created_at AS "createdAt" FROM registrants ORDER BY created_at DESC LIMIT 10000');
+      const result = await queryWithRetry('SELECT id, full_name AS "fullName", phone, email, major, study_year AS year, created_at AS "createdAt" FROM registrants ORDER BY created_at DESC LIMIT 10000');
       return json(res, 200, { registrants: result.rows });
     }
     if (req.method === 'POST' && url.pathname === '/api/register') {
-      // الحد: 500 محاولة/ساعة لكل IP (يتحمّل قاعة كاملة على شبكة واحدة)
-      if (rateLimit(req, 'register', 500, 60 * 60 * 1000)) return json(res, 429, { error: 'rate_limited', message: 'تم تجاوز عدد المحاولات. حاول لاحقاً.' });
+      // حد مرتفع ليسمح بقاعة كاملة خلف عنوان IP مشترك.
+      if (rateLimit(req, 'register', 1000, 60 * 60 * 1000)) return json(res, 429, { error: 'rate_limited', message: 'تم تجاوز عدد المحاولات. حاول لاحقاً.' });
       const input = await bodyJson(req);
       const cleaned = cleanRegistration(input);
       if (cleaned.error) return json(res, 400, { error: 'validation_error', field: cleaned.error, message: 'يرجى مراجعة البيانات المطلوبة.' });
@@ -200,16 +236,12 @@ async function handler(req, res) {
       const deviceId = deviceCookie || suppliedDeviceId || crypto.randomBytes(32).toString('base64url');
       const deviceHash = crypto.createHash('sha256').update(deviceId).digest('hex');
       try {
-        const result = await pool.query('INSERT INTO registrants (full_name, phone, email, device_hash, major, study_year) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at AS "createdAt"', [fullName, phone, email, deviceHash, major, year]);
+        const result = await queryWithRetry('INSERT INTO registrants (full_name, phone, email, device_hash, major, study_year) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at AS "createdAt"', [fullName, phone, email, deviceHash, major, year]);
         const headers = deviceCookie ? {} : { 'Set-Cookie': registrationDeviceCookie(deviceId) };
         return json(res, 201, { registered: true, id: result.rows[0].id, createdAt: result.rows[0].createdAt }, headers);
       } catch (error) {
         if (error.code === '23505') {
-          let field = error.constraint === 'registrants_phone_key' ? 'phone' : error.constraint === 'registrants_device_hash_unique' ? 'device' : 'email';
-          if (field !== 'device') {
-            const existingDevice = await pool.query('SELECT 1 FROM registrants WHERE device_hash = $1 LIMIT 1', [deviceHash]);
-            if (existingDevice.rowCount) field = 'device';
-          }
+          const field = error.constraint === 'registrants_phone_key' ? 'phone' : error.constraint === 'registrants_device_hash_unique' ? 'device' : 'email';
           const message = field === 'phone' ? 'رقم الهاتف مسجّل مسبقاً.' : field === 'device' ? 'هذا الجهاز مسجّل مسبقاً، ولا يمكنه التسجيل مرة أخرى.' : 'البريد الإلكتروني مسجّل مسبقاً.';
           return json(res, 409, { error: 'duplicate', field, message });
         }
@@ -224,13 +256,21 @@ async function handler(req, res) {
 
 async function start() {
   if (!DATABASE_URL) throw new Error('DATABASE_URL is required.');
+  let databaseHost = '';
+  try { databaseHost = new URL(DATABASE_URL).hostname; } catch {}
+  if (isProduction && !databaseHost.includes('-pooler')) throw new Error('Production DATABASE_URL must use the Neon pooled endpoint (-pooler).');
   if (!ADMIN_USERNAME || !ADMIN_PASSWORD) throw new Error('ADMIN_USERNAME and ADMIN_PASSWORD are required.');
   if (!SESSION_SECRET || SESSION_SECRET.length < 32) throw new Error('SESSION_SECRET must contain at least 32 characters.');
   await initDatabase();
   const server = http.createServer((req, res) => handler(req, res).catch(error => {
-    if (!res.headersSent) json(res, error.status || 500, { error: error.message === 'too_large' ? 'request_too_large' : 'server_error', message: error.status ? 'تعذّر قراءة الطلب.' : 'حدث خطأ غير متوقع.' });
+    const status = error.status || (isRetryableDatabaseError(error) ? 503 : 500);
+    if (!res.headersSent) json(res, status, {
+      error: error.status === 413 ? 'request_too_large' : error.status === 400 ? 'invalid_request' : status === 503 ? 'database_unavailable' : 'server_error',
+      message: error.status ? 'تعذّر قراءة الطلب.' : status === 503 ? 'الخدمة مشغولة مؤقتاً. حاول مجدداً بعد قليل.' : 'حدث خطأ غير متوقع.'
+    });
     else res.destroy();
-    if (!isProduction) console.error(error);
+    // Never log request bodies, names, emails, phone numbers, or SQL values.
+    console.error('Request failed', { path: urlPath(req.url), code: error.code || 'application_error', status });
   }));
   server.listen(PORT, '0.0.0.0', () => console.log(`Registration app listening on ${PORT}`));
   const close = () => server.close(() => pool.end().finally(() => process.exit(0)));
@@ -238,4 +278,11 @@ async function start() {
   process.on('SIGINT', close);
 }
 
-start().catch(error => { console.error(error.message); process.exit(1); });
+function urlPath(requestUrl) {
+  try { return new URL(requestUrl, 'http://localhost').pathname; } catch { return '/unknown'; }
+}
+
+start().catch(error => {
+  console.error('Server startup failed', { code: error.code || 'configuration_error' });
+  process.exit(1);
+});
