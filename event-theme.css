@@ -22,7 +22,7 @@ body.event-body{background:#f3f7fc;color:#15263c;font-family:"Cairo",sans-serif}
 .event-kicker{display:flex;align-items:center;gap:10px;width:max-content;max-width:100%;padding:9px 13px;border:1px solid rgba(255,255,255,.22);border-radius:100px;background:rgba(255,255,255,.09);color:#eff6ff;font-size:11px;font-weight:600}
 .event-kicker-dot{width:8px;height:8px;border-radius:50%;background:#ffac69;box-shadow:0 0 0 5px rgba(255,172,105,.15)}
 .event-overline{margin:28px 0 3px;color:#bed7f8;font:600 10px/1.6 Arial,sans-serif;letter-spacing:.15em}
-.event-intro h1{display:flex;align-items:baseline;gap:14px;margin:0;color:#fff;font:700 clamp(48px,6vw,76px)/1.22 Arial,sans-serif;letter-spacing:-.055em}
+.event-intro h1{display:flex;direction:ltr;justify-content:flex-end;align-items:baseline;gap:14px;margin:0;color:#fff;font:700 clamp(48px,6vw,76px)/1.22 Arial,sans-serif;letter-spacing:-.055em}
 .event-title-year{color:#ffb16e}
 .event-description{max-width:500px;margin:17px 0 0;color:#e0ecfb;font:400 15px/2 Cairo,sans-serif}
 .event-facts{display:flex;flex-wrap:wrap;gap:19px;margin-top:27px;color:#d5e5f8;font-size:11px}
