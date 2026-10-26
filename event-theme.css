@@ -31,7 +31,7 @@ body.event-body {
   position: sticky; z-index: 20; top: 0; height: 78px; display: flex; align-items: center; justify-content: space-between;
   border-bottom: 1px solid rgba(17, 35, 59, .09); background: rgba(247, 250, 253, .86); backdrop-filter: blur(16px);
 }
-.event-wordmark { display: inline-flex; align-items: center; gap: 9px; color: var(--ieee-navy); text-decoration: none; font: 700 11px/1 var(--display); letter-spacing: .12em; white-space: nowrap; }
+.event-wordmark { display: inline-flex; direction: ltr; align-items: center; gap: 9px; color: var(--ieee-navy); text-decoration: none; font: 700 11px/1 var(--display); letter-spacing: .12em; white-space: nowrap; }
 .event-wordmark span { color: var(--ieee-blue); font-size: 20px; letter-spacing: -.07em; }
 .event-wordmark i { width: 1px; height: 19px; background: #c6d3df; }
 .event-wordmark b { font-size: 10px; letter-spacing: .14em; }
@@ -89,7 +89,7 @@ body.event-body {
 .event-registration-panel .input-wrap input::placeholder { color: #8493a4; opacity: 1; }
 .event-registration-panel .input-wrap input:focus, .event-registration-panel .input-wrap select:focus { border-color: var(--ieee-blue); outline: 0; background: white; box-shadow: 0 0 0 4px rgba(0,98,155,.1); }
 .event-registration-panel .input-icon { color: #567991; }
-.event-registration-panel .input-icon svg { width: 19px; height: 19px; }
+.event-registration-panel .input-icon svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .event-registration-panel .input-wrap select { padding-inline-end: 45px; }
 .event-registration-panel .input-wrap:has(select)::after { color: var(--ieee-blue); }
 .event-registration-panel .consent { margin: 17px 0 19px; color: #4a5d71; font-size: 11px; line-height: 1.8; }
